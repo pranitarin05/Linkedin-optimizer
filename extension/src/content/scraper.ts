@@ -64,6 +64,17 @@ function extractSectionData(text: string): SectionData {
   }
 }
 
+function getElementText(element: HTMLElement): string {
+  const paragraphs = element.querySelectorAll('p, span, div')
+  if (paragraphs.length > 0) {
+    return Array.from(paragraphs)
+      .map(p => p.textContent?.trim())
+      .filter(Boolean)
+      .join('\n')
+  }
+  return element.textContent || ''
+}
+
 function parseExperienceItem(item: HTMLElement): ExperienceEntry {
   const titleEl = item.querySelector(SELECTORS.experience.title)
   const companyEl = item.querySelector(SELECTORS.experience.company)
@@ -161,18 +172,17 @@ function extractCertifications(): CertificationEntry[] {
   return Array.from(items).map(item => parseCertificationItem(item as HTMLElement))
 }
 
-function extractSection(selectorKey: keyof typeof SELECTORS): SectionData {
-  const selectors = SELECTORS[selectorKey] as Record<string, string>
+function extractSectionByKey(selectorKey: string): SectionData {
+  const selectors = SELECTORS[selectorKey as keyof typeof SELECTORS] as Record<string, string>
   let text = ''
 
-  // Try primary selector first, then fallback, then structural
   for (const key of ['primary', 'fallback', 'structural']) {
     const selector = selectors[key]
     if (!selector) continue
 
     const element = document.querySelector(selector) as HTMLElement
     if (element) {
-      text = extractSection(element)
+      text = getElementText(element)
       break
     }
   }
@@ -180,28 +190,16 @@ function extractSection(selectorKey: keyof typeof SELECTORS): SectionData {
   return extractSectionData(text)
 }
 
-function extractSection(element: HTMLElement): string {
-  // Get text content, preserving some structure
-  const paragraphs = element.querySelectorAll('p, span, div')
-  if (paragraphs.length > 0) {
-    return Array.from(paragraphs)
-      .map(p => p.textContent?.trim())
-      .filter(Boolean)
-      .join('\n')
-  }
-  return element.textContent || ''
-}
-
 export function scrapeProfile(): ScrapedProfile {
   const sections: ProfileSection = {
-    headline: extractSection('headline'),
-    about: extractSection('about'),
+    headline: extractSectionByKey('headline'),
+    about: extractSectionByKey('about'),
     experience: extractExperience(),
     education: extractEducation(),
     skills: extractSkills(),
-    featured: [], // Featured requires separate parsing
+    featured: [],
     certifications: extractCertifications(),
-    recommendations: [], // Recommendations require separate parsing
+    recommendations: [],
     contactInfo: {
       email: '',
       website: '',
