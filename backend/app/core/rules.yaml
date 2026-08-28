@@ -1,0 +1,71 @@
+from typing import Dict, List, Any
+
+# Scoring rules configuration
+# Format: section -> list of rules with weight and check function
+
+RULES_CONFIG: Dict[str, List[Dict[str, Any]]] = {
+    "headline": [
+        {"name": "exists", "weight": 20, "description": "Headline must be present"},
+        {"name": "min_length", "weight": 20, "description": "Headline must be at least 40 characters"},
+        {"name": "optimal_length", "weight": 10, "description": "Headline should be 40-220 characters"},
+    ],
+    "about": [
+        {"name": "exists", "weight": 15, "description": "About section must be present"},
+        {"name": "min_length", "weight": 20, "description": "About must be at least 200 characters"},
+        {"name": "optimal_length", "weight": 15, "description": "About should be 200-2600 characters"},
+    ],
+    "experience": [
+        {"name": "has_entries", "weight": 20, "description": "Must have at least 1 experience entry"},
+        {"name": "min_entries", "weight": 15, "description": "Should have at least 2 experience entries"},
+        {"name": "has_descriptions", "weight": 15, "description": "Entries should have descriptions"},
+    ],
+    "skills": [
+        {"name": "has_skills", "weight": 20, "description": "Must have at least 1 skill"},
+        {"name": "min_skills", "weight": 20, "description": "Should have at least 5 skills"},
+    ],
+    "education": [
+        {"name": "has_entries", "weight": 20, "description": "Must have at least 1 education entry"},
+    ],
+    "certifications": [
+        {"name": "has_entries", "weight": 20, "description": "Consider adding certifications"},
+    ],
+}
+
+TIPS_CONFIG = {
+    "headline": [
+        "Include your job title and key skills",
+        "Add value proposition (what you help companies do)",
+        "Use relevant keywords for your industry",
+        "Keep it under 220 characters",
+    ],
+    "about": [
+        "Start with a strong opening line",
+        "Include your professional story",
+        "Highlight key achievements with metrics",
+        "End with a call to action",
+        "Use short paragraphs for readability",
+    ],
+    "experience": [
+        "Use bullet points for achievements",
+        "Include metrics and numbers where possible",
+        "Start each bullet with an action verb",
+        "Focus on impact, not just duties",
+        "Keep descriptions concise (100-300 chars each)",
+    ],
+    "skills": [
+        "Add at least 5 relevant skills",
+        "Include both technical and soft skills",
+        "Pin your top 3 most important skills",
+        "Get endorsements from colleagues",
+    ],
+    "education": [
+        "Include relevant coursework",
+        "Add honors and activities",
+        "List relevant projects",
+    ],
+    "certifications": [
+        "Add industry-recognized certifications",
+        "Include credential IDs for verification",
+        "Keep certification dates current",
+    ],
+}
