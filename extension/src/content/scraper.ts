@@ -1,211 +1,216 @@
 import type { ProfileSection, SectionData, ExperienceEntry, EducationEntry, SkillEntry, CertificationEntry, ScrapedProfile } from '../types'
 
-const SELECTORS = {
-  headline: {
-    primary: '[data-anonymize="field-name"]',
-    fallback: 'h1.text-heading-xlarge',
-    structural: '.pv-text-details__left-panel h1',
-  },
-  about: {
-    primary: '#about ~ .display-flex .inline-show-more-text',
-    fallback: '.pv-about-section .pv-about__summary-text',
-    structural: 'section.pv-about-section .pv-about__summary-text',
-  },
-  experience: {
-    container: '#experience ~ .pvs-list__outer-container',
-    item: '.pvs-entity--padded',
-    title: '.t-bold span[aria-hidden="true"]',
-    company: '.t-normal span[aria-hidden="true"]',
-    dates: '.pvs-entity__caption-wrapper',
-    description: '.pvs-entity__secondary-title',
-  },
-  education: {
-    container: '#education ~ .pvs-list__outer-container',
-    item: '.pvs-entity--padded',
-    school: '.t-bold span[aria-hidden="true"]',
-    degree: '.pvs-entity__secondary-title',
-    dates: '.pvs-entity__caption-wrapper',
-  },
-  skills: {
-    container: '#skills ~ .pvs-list__outer-container',
-    item: '.pvs-entity--padded',
-    name: '.t-bold span[aria-hidden="true"]',
-    endorsements: '.pvs-entity__caption-wrapper',
-  },
-  certifications: {
-    container: '#licenses_and_certifications ~ .pvs-list__outer-container',
-    item: '.pvs-entity--padded',
-    name: '.t-bold span[aria-hidden="true"]',
-    organization: '.pvs-entity__secondary-title',
-    dates: '.pvs-entity__caption-wrapper',
-  },
-  contactInfo: {
-    button: '.pv-contact-info__contact-type',
-    email: '.pv-contact-info__ci-container a[href^="mailto:"]',
-    website: '.pv-contact-info__ci-container a[href^="http"]',
-    phone: '.pv-contact-info__ci-container span.t-14',
-  },
-}
-
 function getProfileUrl(): string {
   return window.location.href
 }
 
-function extractText(element: HTMLElement | null): string {
+function extractText(element: Element | null): string {
   if (!element) return ''
   return (element.textContent || '').trim()
 }
 
-function extractSectionData(text: string): SectionData {
-  return {
-    text,
-    length: text.length,
-    exists: text.length > 0,
-  }
+function makeSection(text: string): SectionData {
+  return { text, length: text.length, exists: text.length > 0 }
 }
 
-function getElementText(element: HTMLElement): string {
-  const paragraphs = element.querySelectorAll('p, span, div')
-  if (paragraphs.length > 0) {
-    return Array.from(paragraphs)
-      .map(p => p.textContent?.trim())
-      .filter(Boolean)
-      .join('\n')
+function trySelectors(selectors: string[]): string {
+  for (const sel of selectors) {
+    try {
+      const el = document.querySelector(sel)
+      if (el && el.textContent?.trim()) return el.textContent.trim()
+    } catch (_) {}
   }
-  return element.textContent || ''
+  return ''
 }
 
-function parseExperienceItem(item: HTMLElement): ExperienceEntry {
-  const titleEl = item.querySelector(SELECTORS.experience.title)
-  const companyEl = item.querySelector(SELECTORS.experience.company)
-  const datesEl = item.querySelector(SELECTORS.experience.dates)
-  const descEl = item.querySelector(SELECTORS.experience.description)
-
-  const title = extractText(titleEl as HTMLElement)
-  const company = extractText(companyEl as HTMLElement)
-  const dates = extractText(datesEl as HTMLElement)
-  const description = extractText(descEl as HTMLElement)
-
-  const dateParts = dates.split(' - ')
-  const startDate = dateParts[0] || ''
-  const endDate = dateParts[1] || ''
-  const isCurrent = endDate.toLowerCase().includes('present') || endDate === ''
-
-  return {
-    title,
-    company,
-    location: '',
-    startDate,
-    endDate,
-    description,
-    isCurrent,
+function trySelectorsHTML(selectors: string[]): string {
+  for (const sel of selectors) {
+    try {
+      const el = document.querySelector(sel)
+      if (el && el.textContent?.trim()) {
+        return Array.from(el.querySelectorAll('p, span, li'))
+          .map(p => p.textContent?.trim())
+          .filter(Boolean)
+          .join('\n')
+          || el.textContent!.trim()
+      }
+    } catch (_) {}
   }
+  return ''
 }
 
-function parseEducationItem(item: HTMLElement): EducationEntry {
-  const schoolEl = item.querySelector(SELECTORS.education.school)
-  const degreeEl = item.querySelector(SELECTORS.education.degree)
-  const datesEl = item.querySelector(SELECTORS.education.dates)
-
-  return {
-    school: extractText(schoolEl as HTMLElement),
-    degree: extractText(degreeEl as HTMLElement),
-    field: '',
-    startDate: extractText(datesEl as HTMLElement).split(' - ')[0] || '',
-    endDate: extractText(datesEl as HTMLElement).split(' - ')[1] || '',
-  }
+function extractHeadline(): SectionData {
+  const text = trySelectors([
+    'h1.text-heading-xlarge',
+    '[data-anonymize="field-name"]',
+    '.pv-text-details__left-panel h1',
+    'section.pv-top-card h1',
+    'h1',
+  ])
+  return makeSection(text)
 }
 
-function parseSkillItem(item: HTMLElement): SkillEntry {
-  const nameEl = item.querySelector(SELECTORS.skills.name)
-  const endorsementsEl = item.querySelector(SELECTORS.skills.endorsements)
-
-  return {
-    name: extractText(nameEl as HTMLElement),
-    endorsements: parseInt(extractText(endorsementsEl as HTMLElement)) || 0,
-  }
-}
-
-function parseCertificationItem(item: HTMLElement): CertificationEntry {
-  const nameEl = item.querySelector(SELECTORS.certifications.name)
-  const orgEl = item.querySelector(SELECTORS.certifications.organization)
-  const datesEl = item.querySelector(SELECTORS.certifications.dates)
-
-  return {
-    name: extractText(nameEl as HTMLElement),
-    organization: extractText(orgEl as HTMLElement),
-    issueDate: extractText(datesEl as HTMLElement),
-    credentialUrl: '',
-    credentialId: '',
-  }
+function extractAbout(): SectionData {
+  const text = trySelectorsHTML([
+    '#about ~ .display-flex .inline-show-more-text',
+    '.pv-about-section .pv-about__summary-text',
+    'section#about .inline-show-more-text',
+    '[data field="about"] .inline-show-more-text',
+    'section.pv-about',
+  ])
+  return makeSection(text)
 }
 
 function extractExperience(): ExperienceEntry[] {
-  const container = document.querySelector(SELECTORS.experience.container)
+  // Try multiple container selectors
+  const containerSelectors = [
+    '#experience ~ .pvs-list__outer-container',
+    'section#experience',
+    '#experience',
+  ]
+
+  let container: Element | null = null
+  for (const sel of containerSelectors) {
+    container = document.querySelector(sel)
+    if (container) break
+  }
   if (!container) return []
 
-  const items = container.querySelectorAll(SELECTORS.experience.item)
-  return Array.from(items).map(item => parseExperienceItem(item as HTMLElement))
+  const items = container.querySelectorAll('.pvs-entity--padded, li.artdeco-list__item, [data-view-name="profile-card"]')
+  if (items.length === 0) {
+    // Fallback: try to extract any experience-like content
+    const allText = container.textContent || ''
+    if (allText.length > 20) {
+      return [{
+        title: '',
+        company: '',
+        location: '',
+        startDate: '',
+        endDate: '',
+        description: allText.substring(0, 500),
+        isCurrent: false,
+      }]
+    }
+    return []
+  }
+
+  return Array.from(items).map(item => {
+    const titleEl = item.querySelector('.t-bold span[aria-hidden="true"], .display-flex .visually-hidden')
+    const companyEl = item.querySelector('.t-normal span[aria-hidden="true"]')
+    const datesEl = item.querySelector('.pvs-entity__caption-wrapper, .pv-entity__date-range')
+    const descEl = item.querySelector('.pvs-entity__secondary-title, .pv-entity__description')
+
+    const title = extractText(titleEl)
+    const company = extractText(companyEl)
+    const dates = extractText(datesEl)
+    const description = extractText(descEl)
+
+    const dateParts = dates.split(' - ')
+    const startDate = dateParts[0]?.trim() || ''
+    const endDate = dateParts[1]?.trim() || ''
+    const isCurrent = endDate.toLowerCase().includes('present') || endDate === ''
+
+    return { title, company, location: '', startDate, endDate, description, isCurrent }
+  }).filter(e => e.title || e.company || e.description)
 }
 
 function extractEducation(): EducationEntry[] {
-  const container = document.querySelector(SELECTORS.education.container)
+  const containerSelectors = [
+    '#education ~ .pvs-list__outer-container',
+    'section#education',
+    '#education',
+  ]
+
+  let container: Element | null = null
+  for (const sel of containerSelectors) {
+    container = document.querySelector(sel)
+    if (container) break
+  }
   if (!container) return []
 
-  const items = container.querySelectorAll(SELECTORS.education.item)
-  return Array.from(items).map(item => parseEducationItem(item as HTMLElement))
+  const items = container.querySelectorAll('.pvs-entity--padded, li.artdeco-list__item')
+  return Array.from(items).map(item => {
+    const schoolEl = item.querySelector('.t-bold span[aria-hidden="true"]')
+    const degreeEl = item.querySelector('.pvs-entity__secondary-title')
+    const datesEl = item.querySelector('.pvs-entity__caption-wrapper')
+
+    return {
+      school: extractText(schoolEl),
+      degree: extractText(degreeEl),
+      field: '',
+      startDate: extractText(datesEl).split(' - ')[0]?.trim() || '',
+      endDate: extractText(datesEl).split(' - ')[1]?.trim() || '',
+    }
+  }).filter(e => e.school)
 }
 
 function extractSkills(): SkillEntry[] {
-  const container = document.querySelector(SELECTORS.skills.container)
+  const containerSelectors = [
+    '#skills ~ .pvs-list__outer-container',
+    'section#skills',
+    '#skills',
+  ]
+
+  let container: Element | null = null
+  for (const sel of containerSelectors) {
+    container = document.querySelector(sel)
+    if (container) break
+  }
   if (!container) return []
 
-  const items = container.querySelectorAll(SELECTORS.skills.item)
-  return Array.from(items).map(item => parseSkillItem(item as HTMLElement))
+  const items = container.querySelectorAll('.pvs-entity--padded, li.artdeco-list__item')
+  return Array.from(items).map(item => {
+    const nameEl = item.querySelector('.t-bold span[aria-hidden="true"]')
+    const endEl = item.querySelector('.pvs-entity__caption-wrapper')
+
+    return {
+      name: extractText(nameEl),
+      endorsements: parseInt(extractText(endEl)) || 0,
+    }
+  }).filter(s => s.name)
 }
 
 function extractCertifications(): CertificationEntry[] {
-  const container = document.querySelector(SELECTORS.certifications.container)
+  const containerSelectors = [
+    '#licenses_and_certifications ~ .pvs-list__outer-container',
+    'section#licenses_and_certifications',
+    '#licenses_and_certifications',
+  ]
+
+  let container: Element | null = null
+  for (const sel of containerSelectors) {
+    container = document.querySelector(sel)
+    if (container) break
+  }
   if (!container) return []
 
-  const items = container.querySelectorAll(SELECTORS.certifications.item)
-  return Array.from(items).map(item => parseCertificationItem(item as HTMLElement))
-}
+  const items = container.querySelectorAll('.pvs-entity--padded, li.artdeco-list__item')
+  return Array.from(items).map(item => {
+    const nameEl = item.querySelector('.t-bold span[aria-hidden="true"]')
+    const orgEl = item.querySelector('.pvs-entity__secondary-title')
+    const datesEl = item.querySelector('.pvs-entity__caption-wrapper')
 
-function extractSectionByKey(selectorKey: string): SectionData {
-  const selectors = SELECTORS[selectorKey as keyof typeof SELECTORS] as Record<string, string>
-  let text = ''
-
-  for (const key of ['primary', 'fallback', 'structural']) {
-    const selector = selectors[key]
-    if (!selector) continue
-
-    const element = document.querySelector(selector) as HTMLElement
-    if (element) {
-      text = getElementText(element)
-      break
+    return {
+      name: extractText(nameEl),
+      organization: extractText(orgEl),
+      issueDate: extractText(datesEl),
+      credentialUrl: '',
+      credentialId: '',
     }
-  }
-
-  return extractSectionData(text)
+  }).filter(c => c.name)
 }
 
 export function scrapeProfile(): ScrapedProfile {
   const sections: ProfileSection = {
-    headline: extractSectionByKey('headline'),
-    about: extractSectionByKey('about'),
+    headline: extractHeadline(),
+    about: extractAbout(),
     experience: extractExperience(),
     education: extractEducation(),
     skills: extractSkills(),
     featured: [],
     certifications: extractCertifications(),
     recommendations: [],
-    contactInfo: {
-      email: '',
-      website: '',
-      phone: '',
-      location: '',
-    },
+    contactInfo: { email: '', website: '', phone: '', location: '' },
   }
 
   return {

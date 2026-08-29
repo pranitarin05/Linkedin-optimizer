@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LinkedIn Optimizer</title>
+    <style>
+      body { width: 350px; min-height: 200px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 16px; }
+      h1 { font-size: 16px; margin: 0 0 12px; }
+      p { font-size: 13px; color: #666; margin: 0 0 12px; }
+      button { width: 100%; padding: 10px; background: #0a66c2; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
+      button:hover { background: #004182; }
+    </style>
+  </head>
+  <body>
+    <h1>LinkedIn Profile Optimizer</h1>
+    <p>Click the button below to open the optimizer sidebar on your LinkedIn profile.</p>
+    <button id="open-sidepanel">Open Optimizer</button>
+    <script>
+      document.getElementById('open-sidepanel')?.addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.id) {
+          chrome.sidePanel.open({ tabId: tab.id });
+        }
+      });
+    </script>
+  </body>
+</html>
