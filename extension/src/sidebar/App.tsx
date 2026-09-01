@@ -12,6 +12,142 @@ type Step = 'loading' | 'persona' | 'score' | 'source' | 'generating' | 'review'
 
 const API_URL = 'https://linkedin-optimizer-506l.onrender.com'
 
+// This function runs inside the LinkedIn page via chrome.scripting.executeScript
+function scrapeLinkedInProfile() {
+  function extractText(el) {
+    if (!el) return ''
+    return (el.textContent || '').trim()
+  }
+
+  function trySels(sels) {
+    for (const s of sels) {
+      try {
+        const el = document.querySelector(s)
+        if (el && el.textContent && el.textContent.trim()) return el.textContent.trim()
+      } catch (_) {}
+    }
+    return ''
+  }
+
+  function trySelsHTML(sels) {
+    for (const s of sels) {
+      try {
+        const el = document.querySelector(s)
+        if (el && el.textContent && el.textContent.trim()) {
+          const parts = Array.from(el.querySelectorAll('p, span, li')).map(p => p.textContent.trim()).filter(Boolean)
+          return parts.length > 0 ? parts.join('\n') : el.textContent.trim()
+        }
+      } catch (_) {}
+    }
+    return ''
+  }
+
+  // Headline
+  const headline = trySels([
+    'h1.text-heading-xlarge',
+    '[data-anonymize="field-name"]',
+    '.pv-text-details__left-panel h1',
+    'section.pv-top-card h1',
+    '.pv-top-card-v2-ctas h1',
+    '.artdeco-entity-lockup__title h1',
+    'main h1',
+    'h1',
+  ]).replace(/^--$/, '')
+
+  // About
+  const about = trySelsHTML([
+    '#about ~ .display-flex .inline-show-more-text',
+    '.pv-about-section .pv-about__summary-text',
+    'section#about .inline-show-more-text',
+    '[data-field="about"] .inline-show-more-text',
+    'section.pv-about',
+    '#about ~ div .display-flex',
+    '#about ~ div span[aria-hidden="true"]',
+    '#about',
+  ])
+
+  // Experience
+  let experience = []
+  const expContainer = document.querySelector('#experience ~ .pvs-list__outer-container') ||
+    document.querySelector('section#experience') ||
+    document.querySelector('#experience') ||
+    document.querySelector('#experience ~ div') ||
+    document.querySelector('[data-section="experience"]')
+  if (expContainer) {
+    const items = expContainer.querySelectorAll('.pvs-entity--padded, li.artdeco-list__item, [data-view-name="profile-card"], .pvs-list__paged-list-item')
+    experience = Array.from(items).map(item => {
+      const title = extractText(item.querySelector('.t-bold span[aria-hidden="true"], span[aria-hidden="true"]'))
+      const company = extractText(item.querySelector('.t-normal span[aria-hidden="true"], .pvs-entity__secondary-title span[aria-hidden="true"]'))
+      const dates = extractText(item.querySelector('.pvs-entity__caption-wrapper, span[aria-hidden="false"]'))
+      const description = extractText(item.querySelector('.pvs-entity__secondary-title, span[aria-hidden="false"]'))
+      const parts = dates.split(' - ')
+      return { title, company, location: '', startDate: (parts[0]||'').trim(), endDate: (parts[1]||'').trim(), description, isCurrent: (parts[1]||'').toLowerCase().includes('present') }
+    }).filter(e => e.title || e.company || e.description)
+  }
+
+  // Skills
+  let skills = []
+  const skillsContainer = document.querySelector('#skills ~ .pvs-list__outer-container') ||
+    document.querySelector('section#skills') ||
+    document.querySelector('#skills') ||
+    document.querySelector('#skills ~ div') ||
+    document.querySelector('[data-section="skills"]')
+  if (skillsContainer) {
+    const items = skillsContainer.querySelectorAll('.pvs-entity--padded, li.artdeco-list__item')
+    skills = Array.from(items).map(item => ({
+      name: extractText(item.querySelector('.t-bold span[aria-hidden="true"]')),
+      endorsements: parseInt(extractText(item.querySelector('.pvs-entity__caption-wrapper'))) || 0,
+    })).filter(s => s.name)
+  }
+
+  // Education
+  let education = []
+  const eduContainer = document.querySelector('#education ~ .pvs-list__outer-container') ||
+    document.querySelector('section#education') ||
+    document.querySelector('#education') ||
+    document.querySelector('#education ~ div') ||
+    document.querySelector('[data-section="education"]')
+  if (eduContainer) {
+    const items = eduContainer.querySelectorAll('.pvs-entity--padded, li.artdeco-list__item')
+    education = Array.from(items).map(item => {
+      const school = extractText(item.querySelector('.t-bold span[aria-hidden="true"]'))
+      const degree = extractText(item.querySelector('.pvs-entity__secondary-title'))
+      const dates = extractText(item.querySelector('.pvs-entity__caption-wrapper'))
+      const parts = dates.split(' - ')
+      return { school, degree, field: '', startDate: (parts[0]||'').trim(), endDate: (parts[1]||'').trim() }
+    }).filter(e => e.school)
+  }
+
+  // Certifications
+  let certifications = []
+  const certContainer = document.querySelector('#licenses_and_certifications ~ .pvs-list__outer-container') ||
+    document.querySelector('section#licenses_and_certifications') ||
+    document.querySelector('#licenses_and_certifications') ||
+    document.querySelector('#licenses_and_certifications ~ div') ||
+    document.querySelector('[data-section="licenses_and_certifications"]')
+  if (certContainer) {
+    const items = certContainer.querySelectorAll('.pvs-entity--padded, li.artdeco-list__item')
+    certifications = Array.from(items).map(item => ({
+      name: extractText(item.querySelector('.t-bold span[aria-hidden="true"]')),
+      organization: extractText(item.querySelector('.pvs-entity__secondary-title')),
+      issueDate: extractText(item.querySelector('.pvs-entity__caption-wrapper')),
+      credentialUrl: '', credentialId: '',
+    })).filter(c => c.name)
+  }
+
+  return {
+    profileUrl: window.location.href,
+    scrapedAt: new Date().toISOString(),
+    sections: {
+      headline: { text: headline, length: headline.length, exists: headline.length > 0 },
+      about: { text: about, length: about.length, exists: about.length > 0 },
+      experience, education, skills,
+      featured: [], certifications, recommendations: [],
+      contactInfo: { email: '', website: '', phone: '', location: '' },
+    },
+  }
+}
+
 export default function App() {
   const [step, setStep] = useState<Step>('loading')
   const [profile, setProfile] = useState<ScrapedProfile | null>(null)
@@ -26,25 +162,16 @@ export default function App() {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
       if (!tab?.id || !tab.url?.includes('linkedin.com/in/')) {
         setError('Please navigate to your LinkedIn profile page first.')
-        setStep('loading')
         return
       }
 
-      // Ensure content script is injected
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['src/content/index.ts'],
-        })
-      } catch (_) {
-        // Already injected, ignore
-      }
+      // Execute scraper directly in the page context
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: scrapeLinkedInProfile,
+      })
 
-      // Small delay to let content script initialize
-      await new Promise(r => setTimeout(r, 500))
-
-      const response = await chrome.tabs.sendMessage(tab.id, { action: 'SCRAPE_PROFILE' })
-
+      const response = results?.[0]?.result
       if (!response || !response.sections) {
         setError('Could not parse profile. The LinkedIn DOM may have changed.')
         return
@@ -59,11 +186,8 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(response),
         }).then(r => r.json())
-
         setScore(scoreResult)
-      } catch (scoreErr) {
-        console.error('Scoring failed:', scoreErr)
-        // Use a basic local score as fallback
+      } catch (_) {
         setScore(buildLocalScore(response))
       }
 
@@ -74,54 +198,26 @@ export default function App() {
     }
   }, [])
 
-  // Local scoring fallback when backend is unreachable
   function buildLocalScore(p: ScrapedProfile): ScoringResult {
-    const sections: Record<string, { score: number; status: string; issues: string[]; tips: string[] }> = {}
+    const s: Record<string, any> = {}
+    const hl = p.sections.headline
+    const hlS = !hl.exists ? 0 : hl.length < 40 ? 40 : hl.length < 100 ? 65 : 85
+    s.headline = { score: hlS, status: hlS >= 80 ? 'excellent' : hlS >= 60 ? 'good' : 'needs_work', issues: hlS < 40 ? ['Missing'] : hlS < 65 ? ['Too short'] : [], tips: hlS < 80 ? ['Add job title + skills'] : [] }
 
-    const headline = p.sections.headline
-    const hScore = !headline.exists ? 0 : headline.length < 40 ? 40 : headline.length < 100 ? 65 : 85
-    sections.headline = {
-      score: hScore,
-      status: hScore >= 80 ? 'excellent' : hScore >= 60 ? 'good' : 'needs_work',
-      issues: hScore < 40 ? ['Headline is missing'] : hScore < 65 ? ['Headline is too short'] : [],
-      tips: hScore < 80 ? ['Include your job title', 'Add key skills', 'Keep it 40-220 characters'] : [],
-    }
+    const ab = p.sections.about
+    const abS = !ab.exists ? 0 : ab.length < 200 ? 35 : ab.length < 500 ? 60 : 85
+    s.about = { score: abS, status: abS >= 80 ? 'excellent' : abS >= 60 ? 'good' : 'needs_work', issues: abS < 35 ? ['Missing'] : abS < 60 ? ['Too short'] : [], tips: abS < 80 ? ['Add metrics + CTA'] : [] }
 
-    const about = p.sections.about
-    const aScore = !about.exists ? 0 : about.length < 200 ? 35 : about.length < 500 ? 60 : 85
-    sections.about = {
-      score: aScore,
-      status: aScore >= 80 ? 'excellent' : aScore >= 60 ? 'good' : 'needs_work',
-      issues: aScore < 35 ? ['About section is missing'] : aScore < 60 ? ['About section is too short (aim for 200+ chars)'] : [],
-      tips: aScore < 80 ? ['Start with a strong opening', 'Include metrics', 'End with a call to action'] : [],
-    }
+    const ex = p.sections.experience
+    const exS = ex.length === 0 ? 0 : ex.length < 2 ? 40 : 75
+    s.experience = { score: exS, status: exS >= 80 ? 'excellent' : exS >= 60 ? 'good' : 'needs_work', issues: exS < 40 ? ['No entries'] : [], tips: exS < 80 ? ['Use bullets + metrics'] : [] }
 
-    const exp = p.sections.experience
-    const eScore = exp.length === 0 ? 0 : exp.length < 2 ? 40 : 75
-    sections.experience = {
-      score: eScore,
-      status: eScore >= 80 ? 'excellent' : eScore >= 60 ? 'good' : 'needs_work',
-      issues: eScore < 40 ? ['No experience entries found'] : eScore < 60 ? ['Add more experience entries'] : [],
-      tips: eScore < 80 ? ['Use bullet points', 'Include metrics', 'Start with action verbs'] : [],
-    }
+    const sk = p.sections.skills
+    const skS = sk.length === 0 ? 0 : sk.length < 5 ? 40 : 80
+    s.skills = { score: skS, status: skS >= 80 ? 'excellent' : skS >= 60 ? 'good' : 'needs_work', issues: skS < 40 ? ['No skills'] : skS < 60 ? ['Add 5+ skills'] : [], tips: skS < 80 ? ['Pin top 3'] : [] }
 
-    const skills = p.sections.skills
-    const sScore = skills.length === 0 ? 0 : skills.length < 5 ? 40 : 80
-    sections.skills = {
-      score: sScore,
-      status: sScore >= 80 ? 'excellent' : sScore >= 60 ? 'good' : 'needs_work',
-      issues: sScore < 40 ? ['No skills found'] : sScore < 60 ? ['Add at least 5 skills'] : [],
-      tips: sScore < 80 ? ['Add both technical and soft skills', 'Pin your top 3'] : [],
-    }
-
-    const overall = Math.round(
-      (sections.headline.score * 0.25) +
-      (sections.about.score * 0.25) +
-      (sections.experience.score * 0.3) +
-      (sections.skills.score * 0.2)
-    )
-
-    return { overallScore: overall, sections }
+    const overall = Math.round(hlS * 0.25 + abS * 0.25 + exS * 0.3 + skS * 0.2)
+    return { overallScore: overall, sections: s }
   }
 
   useEffect(() => {
@@ -135,20 +231,13 @@ export default function App() {
     })
   }, [loadProfile])
 
-  const handlePersonaSelect = async (selectedPersona: Persona) => {
-    setPersona(selectedPersona)
-    await chrome.storage.local.set({ persona: selectedPersona })
+  const handlePersonaSelect = async (p: Persona) => {
+    setPersona(p)
+    await chrome.storage.local.set({ persona: p })
     loadProfile()
   }
 
-  const handleSectionSelect = (section: string) => {
-    setSelectedSection(section)
-    setStep('source')
-  }
-
-  const handleSourceSelect = (source: 'cv' | 'custom') => {
-    // handled by child components
-  }
+  const handleSectionSelect = (section: string) => { setSelectedSection(section); setStep('source') }
 
   const handleGenerate = async (content: string, source: 'cv' | 'custom') => {
     setStep('generating')
@@ -159,46 +248,48 @@ export default function App() {
         body: JSON.stringify({
           source,
           section: selectedSection,
-          customText: source === 'custom' ? content : undefined,
+          customText: content,
           targetRole: persona?.id,
         }),
-      }).then(r => r.json())
+      })
 
-      setDraft(result)
-      setStep('review')
-    } catch (err) {
-      console.error('Generate failed:', err)
-      // Fallback: show the raw content as draft
+      if (!result.ok) {
+        const err = await result.json().catch(() => ({ detail: 'Generation failed' }))
+        throw new Error(err.detail || `Server error: ${result.status}`)
+      }
+
+      const data = await result.json()
+      if (!data.draft) throw new Error('No draft returned from server')
       setDraft({
-        draft: content,
-        matchScore: 50,
+        draft: data.draft,
+        matchScore: data.matchScore ?? data.match_score ?? 0,
+        section: data.section || selectedSection || '',
+        source: data.source || source,
+        appliedRules: data.appliedRules ?? data.applied_rules ?? [],
+      })
+      setStep('review')
+    } catch (err: any) {
+      console.error('Generate error:', err)
+      setDraft({
+        draft: content || 'Generation failed. Please try again.',
+        matchScore: 0,
         section: selectedSection || '',
         source,
-        appliedRules: ['Backend unavailable — showing raw input'],
+        appliedRules: [`Error: ${err.message}`],
       })
       setStep('review')
     }
   }
 
-  const handleApprove = async () => {
-    if (!draft || !selectedSection) return
-    setStep('update')
-  }
-
-  const handleUpdateComplete = () => {
-    setDraft(null)
-    setSelectedSection(null)
-    setStep('score')
-  }
+  const handleApprove = () => { if (draft && selectedSection) setStep('update') }
+  const handleUpdateComplete = () => { setDraft(null); setSelectedSection(null); setStep('score') }
 
   if (error) {
     return (
       <div className="app">
         <div className="error">
           <p>{error}</p>
-          <button onClick={() => { setError(null); setStep('loading'); loadProfile() }}>
-            Try Again
-          </button>
+          <button onClick={() => { setError(null); loadProfile() }}>Try Again</button>
         </div>
       </div>
     )
@@ -206,69 +297,30 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>LinkedIn Optimizer</h1>
-      </header>
-
+      <header className="app-header"><h1>LinkedIn Optimizer</h1></header>
       <main className="app-content">
-        {step === 'loading' && (
-          <div className="loading">
-            <p>Loading your profile...</p>
-          </div>
-        )}
-
-        {step === 'persona' && (
-          <PersonaSelector onSelect={handlePersonaSelect} />
-        )}
-
+        {step === 'loading' && <div className="loading"><p>Loading your profile...</p></div>}
+        {step === 'persona' && <PersonaSelector onSelect={handlePersonaSelect} />}
         {step === 'score' && score && (
           <>
             <ScoreDisplay score={score.overallScore} />
-            <Checklist
-              sections={score.sections}
-              onOptimize={handleSectionSelect}
-            />
+            <Checklist sections={score.sections} onOptimize={handleSectionSelect} />
           </>
         )}
-
         {step === 'source' && selectedSection && (
           <div>
-            <button className="btn-secondary" onClick={() => setStep('score')} style={{ marginBottom: 12 }}>
-              Back
-            </button>
+            <button className="btn-secondary" onClick={() => setStep('score')} style={{ marginBottom: 12 }}>Back</button>
             <h2 style={{ marginBottom: 8 }}>Optimize: {selectedSection}</h2>
-            <CVUpload
-              section={selectedSection}
-              onGenerate={(content) => handleGenerate(content, 'cv')}
-            />
-            <CustomTextInput
-              section={selectedSection}
-              onGenerate={(content) => handleGenerate(content, 'custom')}
-            />
+            <CVUpload section={selectedSection} onGenerate={(c) => handleGenerate(c, 'cv')} />
+            <CustomTextInput section={selectedSection} onGenerate={(c) => handleGenerate(c, 'custom')} />
           </div>
         )}
-
-        {step === 'generating' && (
-          <div className="loading">
-            <p>Generating optimized content...</p>
-          </div>
-        )}
-
+        {step === 'generating' && <div className="loading"><p>Generating...</p></div>}
         {step === 'review' && draft && (
-          <DraftEditor
-            draft={draft}
-            onApprove={handleApprove}
-            onRegenerate={() => handleGenerate('', 'custom')}
-            onDiscard={() => { setDraft(null); setStep('score') }}
-          />
+          <DraftEditor draft={draft} onApprove={handleApprove} onRegenerate={() => handleGenerate('', 'custom')} onDiscard={() => { setDraft(null); setStep('score') }} />
         )}
-
         {step === 'update' && draft && selectedSection && (
-          <UpdatePathPicker
-            section={selectedSection}
-            value={draft.draft}
-            onComplete={handleUpdateComplete}
-          />
+          <UpdatePathPicker section={selectedSection} value={draft.draft} onComplete={handleUpdateComplete} />
         )}
       </main>
     </div>

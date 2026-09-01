@@ -45,8 +45,14 @@ function extractHeadline(): SectionData {
     '[data-anonymize="field-name"]',
     '.pv-text-details__left-panel h1',
     'section.pv-top-card h1',
+    '.pv-top-card-v2-ctas h1',
+    '.artdeco-entity-lockup__title h1',
+    '.display-flex h1',
+    'main h1',
     'h1',
   ])
+  // Filter out placeholder text like "--" or empty
+  if (text === '--' || text === '-') return makeSection('')
   return makeSection(text)
 }
 
@@ -55,8 +61,12 @@ function extractAbout(): SectionData {
     '#about ~ .display-flex .inline-show-more-text',
     '.pv-about-section .pv-about__summary-text',
     'section#about .inline-show-more-text',
-    '[data field="about"] .inline-show-more-text',
+    '[data-field="about"] .inline-show-more-text',
     'section.pv-about',
+    '#about ~ div .display-flex',
+    '#about ~ div span[aria-hidden="true"]',
+    'section.pv-about__summary-text',
+    '#about',
   ])
   return makeSection(text)
 }
@@ -67,6 +77,9 @@ function extractExperience(): ExperienceEntry[] {
     '#experience ~ .pvs-list__outer-container',
     'section#experience',
     '#experience',
+    '#experience ~ div',
+    '[data-section="experience"]',
+    'section.pv-profile-section--experience',
   ]
 
   let container: Element | null = null
@@ -76,7 +89,7 @@ function extractExperience(): ExperienceEntry[] {
   }
   if (!container) return []
 
-  const items = container.querySelectorAll('.pvs-entity--padded, li.artdeco-list__item, [data-view-name="profile-card"]')
+  const items = container.querySelectorAll('.pvs-entity--padded, li.artdeco-list__item, [data-view-name="profile-card"], .pvs-list__paged-list-item, .pvs-entity--padded')
   if (items.length === 0) {
     // Fallback: try to extract any experience-like content
     const allText = container.textContent || ''
@@ -95,10 +108,10 @@ function extractExperience(): ExperienceEntry[] {
   }
 
   return Array.from(items).map(item => {
-    const titleEl = item.querySelector('.t-bold span[aria-hidden="true"], .display-flex .visually-hidden')
-    const companyEl = item.querySelector('.t-normal span[aria-hidden="true"]')
-    const datesEl = item.querySelector('.pvs-entity__caption-wrapper, .pv-entity__date-range')
-    const descEl = item.querySelector('.pvs-entity__secondary-title, .pv-entity__description')
+    const titleEl = item.querySelector('.t-bold span[aria-hidden="true"], .display-flex .visually-hidden, span[aria-hidden="true"]')
+    const companyEl = item.querySelector('.t-normal span[aria-hidden="true"], .pvs-entity__secondary-title span[aria-hidden="true"]')
+    const datesEl = item.querySelector('.pvs-entity__caption-wrapper, .pv-entity__date-range, span[aria-hidden="false"]')
+    const descEl = item.querySelector('.pvs-entity__secondary-title, .pv-entity__description, span[aria-hidden="false"]')
 
     const title = extractText(titleEl)
     const company = extractText(companyEl)
@@ -119,6 +132,9 @@ function extractEducation(): EducationEntry[] {
     '#education ~ .pvs-list__outer-container',
     'section#education',
     '#education',
+    '#education ~ div',
+    '[data-section="education"]',
+    'section.pv-profile-section--education',
   ]
 
   let container: Element | null = null
@@ -149,6 +165,9 @@ function extractSkills(): SkillEntry[] {
     '#skills ~ .pvs-list__outer-container',
     'section#skills',
     '#skills',
+    '#skills ~ div',
+    '[data-section="skills"]',
+    'section.pv-profile-section--skills',
   ]
 
   let container: Element | null = null
@@ -175,6 +194,8 @@ function extractCertifications(): CertificationEntry[] {
     '#licenses_and_certifications ~ .pvs-list__outer-container',
     'section#licenses_and_certifications',
     '#licenses_and_certifications',
+    '#licenses_and_certifications ~ div',
+    '[data-section="licenses_and_certifications"]',
   ]
 
   let container: Element | null = null

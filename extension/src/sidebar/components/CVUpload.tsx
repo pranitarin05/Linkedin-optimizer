@@ -21,17 +21,29 @@ export function CVUpload({ section, onGenerate }: CVUploadProps) {
 
     setUploading(true)
     try {
-      // TODO: Upload to backend and generate content
-      // const formData = new FormData()
-      // formData.append('file', file)
-      // const response = await apiRequest('/content/extract', { method: 'POST', body: formData })
-      // onGenerate(response)
+      const API_URL = 'https://linkedin-optimizer-506l.onrender.com'
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('section', section)
 
-      // For now, simulate
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      onGenerate(file.name)
-    } catch (err) {
+      const response = await fetch(`${API_URL}/content/extract`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      const extracted = data.extracted || ''
+      if (!extracted || extracted.length < 10) {
+        throw new Error('Could not extract meaningful content from the file. Try pasting text instead.')
+      }
+      onGenerate(extracted)
+    } catch (err: any) {
       console.error('Upload failed:', err)
+      alert(err.message || 'Upload failed. Try pasting your CV text instead.')
     } finally {
       setUploading(false)
     }
