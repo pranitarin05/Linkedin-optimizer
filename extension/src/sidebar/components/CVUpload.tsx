@@ -36,11 +36,17 @@ export function CVUpload({ section, onGenerate }: CVUploadProps) {
       }
 
       const data = await response.json()
-      const extracted = data.extracted || ''
-      if (!extracted || extracted.length < 10) {
+      const extracted = data.extracted
+      let text = ''
+      if (typeof extracted === 'string') {
+        text = extracted
+      } else if (extracted && typeof extracted === 'object') {
+        text = extracted.raw_text || Object.values(extracted.sections || {}).join('\n') || JSON.stringify(extracted)
+      }
+      if (!text || text.length < 10) {
         throw new Error('Could not extract meaningful content from the file. Try pasting text instead.')
       }
-      onGenerate(extracted)
+      onGenerate(text)
     } catch (err: any) {
       console.error('Upload failed:', err)
       alert(err.message || 'Upload failed. Try pasting your CV text instead.')

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from app.parsers.pdf_parser import parse_pdf
 from app.parsers.docx_parser import parse_docx
@@ -15,10 +15,14 @@ class ExtractRequest(BaseModel):
 
 
 class GenerateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     source: str  # "cv" or "custom"
     section: str
     custom_text: Optional[str] = None
+    customText: Optional[str] = None
     target_role: Optional[str] = None
+    targetRole: Optional[str] = None
     keywords: Optional[List[str]] = None
 
 
@@ -55,6 +59,9 @@ async def generate_content(request: GenerateRequest):
     try:
         client = Groq(api_key=settings.GROQ_API_KEY)
 
+        custom_text = request.custom_text or request.customText or ""
+        target_role = request.target_role or request.targetRole or ""
+
         section_prompts = {
             "headline": "Write a professional LinkedIn headline (max 220 characters). Include job title, key skills, and value proposition. Be concise and impactful.",
             "about": "Write a LinkedIn About section (max 2600 characters). Start with a strong hook, include key achievements with metrics, and end with a call-to-action. Be professional yet personable.",
@@ -64,8 +71,8 @@ async def generate_content(request: GenerateRequest):
 
         prompt = section_prompts.get(request.section, f"Optimize LinkedIn {request.section} section content.")
 
-        if request.custom_text:
-            prompt += f"\n\nBased on this input:\n{request.custom_text}"
+        if custom_text:
+            prompt += f"\n\nBased on this input:\n{custom_text}"
         elif request.source == "cv":
             prompt += "\n\nOptimize the existing content from the user's CV/resume."
 
