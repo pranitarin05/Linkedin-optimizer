@@ -242,6 +242,11 @@ export default function App() {
   const handleGenerate = async (content: string, source: 'cv' | 'custom') => {
     setStep('generating')
     try {
+      const currentSectionContent = profile?.sections?.[selectedSection as keyof typeof profile.sections]
+      const currentText = typeof currentSectionContent === 'object' && currentSectionContent !== null && 'text' in currentSectionContent
+        ? (currentSectionContent as { text: string }).text
+        : ''
+
       const result = await fetch(`${API_URL}/content/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -250,6 +255,8 @@ export default function App() {
           section: selectedSection,
           customText: content,
           targetRole: persona?.id,
+          currentHeadline: selectedSection === 'headline' ? currentText : undefined,
+          currentAbout: selectedSection === 'about' ? currentText : undefined,
         }),
       })
 
